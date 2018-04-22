@@ -528,8 +528,7 @@ if press() then
   update_pieces()
  end,
  function(self)
-  colpal(place.turn)
-  spr(3,place.x*16,lerp(-16,dropy*16,self.p^2),2,2)
+  draw_piece(place.x,lerp(-1,dropy,self.p^2),place.turn)
  end,
  nil,
  dropy*2+10)
