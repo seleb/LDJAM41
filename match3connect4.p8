@@ -81,6 +81,7 @@ function _draw()
  
  modes[mode].d()
  draw_parts()
+ camera()
 end
 
 function _update60()
@@ -505,6 +506,7 @@ if press() then
  --drop a piece
  local dropy=getdropy(place.x)-1
  anim(function()
+  camera(0,-1)
   board[dropy][place.x]=place.turn
  
   for i=0,20 do
@@ -615,6 +617,7 @@ if move(true) then
   mode="wait"
  else
   --invalid
+  camera(ox-place.x,oy-place.y)
   place.x=ox
   place.y=oy
  end
