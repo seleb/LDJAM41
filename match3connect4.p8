@@ -401,6 +401,18 @@ function blowup(y,x,t)
  p2.r=p.r+1
  end
 end
+
+function sparkle(x,y)
+local p=part()
+p.t=15+rnd(15)
+p.x=x*16+8
+p.y=y*16+8
+p.vx=rnd(4)-2
+p.vy=rnd(4)-2
+p.c=col[place.turn][1]
+p.r=rnd(2)
+return p
+end
 -->8
 --modes
 
@@ -542,14 +554,7 @@ if press() then
   board[dropy][place.x]=place.turn
  
   for i=0,20 do
-  local p=part()
-  p.t=15+rnd(15)
-  p.x=place.x*16+8
-  p.y=dropy*16+8
-  p.vx=rnd(4)-2
-  p.vy=rnd(4)-2
-  p.c=col[place.turn][1]
-  p.r=rnd(2)
+  local p=sparkle(place.x,dropy)
   if i==0 then
    p.r+=7
    p.t=2
@@ -605,6 +610,18 @@ if press() then
  modes.swap.piece=curpiece()
  board[place.y][place.x]=0
  mode="swap"
+ 
+ for i=0,20 do
+  local p=sparkle(place.x,place.y)
+  if i==0 then
+   p.r+=7
+   p.t=2
+   p.vx=0
+   p.vy=0
+   p.c=col[place.turn][2]
+  end
+ end
+ 
  sfx(9)
 end
 
@@ -612,6 +629,7 @@ end,
 d=function()
  draw_pieces()
  draw_board()
+ 
  draw_selector()
  spr(0+t()*3%2,place.x*16+4,place.y*16+4)
 end
@@ -620,6 +638,7 @@ end
 modes.swap={
 piece=nil,
 u=function()
+
 local ox=place.x
 local oy=place.y
 if move(true) then
