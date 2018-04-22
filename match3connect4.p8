@@ -1,55 +1,56 @@
 pico-8 cartridge // http://www.pico-8.com
 version 15
 __lua__
+--match3connect4
+--@seansleblanc
+
 function _init()
-board={}
-for y=0,7 do
-board[y]={}
-for x=0,7 do
-board[y][x]=0
-end
-end
---[[board[3][2]=1
-board[3][1]=1
-board[4][1]=2]]
+ board={}
+ for y=0,7 do
+  local r={}
+  board[y]=r
+  for x=0,7 do
+   r[x]=0
+  end
+ end
 
-place={
-x=0,
-y=0,
-turn=1
-}
-col={
-{8,2},
-{10,9}
-}
-light=7
-dark=6
+ place={
+  x=0,
+  y=0,
+  turn=1
+ }
+ col={
+  {8,2},
+  {10,9}
+ }
+ light=7
+ dark=6
 
-parts={}
-lpart=1
-for i=1,1000 do
-parts[i]={
-dead=true,
-vx=0,
-vy=0,
-x=0,
-y=0,
-r=0,
-c=7,
-t=0
-}
-end
+ parts={}
+ lpart=1
+ for i=1,512 do
+  parts[i]={
+   dead=true,
+   vx=0,
+   vy=0,
+   x=0,
+   y=0,
+   r=0,
+   c=7,
+   t=0
+  }
+ end
 
-lerps={}
-placel={x=0,y=0}
-add(lerps,{place,placel,.2})
+ lerps={}
+ placel={x=0,y=0}
+ add(lerps,{place,placel,.2})
 
-anims={}
+ anims={}
 end
 
 function _draw()
  for i=0,500 do
- circ(i%128,rnd(128),2,0)
+  circ(i%128,rnd(128),2,0)
  end
  
  modes[mode].d()
@@ -57,25 +58,25 @@ function _draw()
 end
 
 function _update60()
-modes[mode].u()
-for i=1,#parts do
-local p=parts[i]
-if not p.dead then
-p.x+=p.vx
-p.y+=p.vy
-p.vx*=.8
-p.vy*=.8
-p.t-=1
-if p.t <= 0 then
-p.dead=true
-end
-end
-end
+ modes[mode].u()
+ for i=1,#parts do
+  local p=parts[i]
+  if not p.dead then
+   p.x+=p.vx
+   p.y+=p.vy
+   p.vx*=.8
+   p.vy*=.8
+   p.t-=1
+   if p.t <= 0 then
+    p.dead=true
+   end
+  end
+ end
 
-for k,l in pairs(lerps) do
- l[2].x=lerp(l[2].x,l[1].x,l[3])
- l[2].y=lerp(l[2].y,l[1].y,l[3])
-end
+ for k,l in pairs(lerps) do
+  l[2].x=lerp(l[2].x,l[1].x,l[3])
+  l[2].y=lerp(l[2].y,l[1].y,l[3])
+ end
 end
 -->8
 --logic helpers
@@ -93,18 +94,18 @@ function getdropy(x)
 end
 
 function curpiece()
-return getpiece(place.y,place.x)
+ return getpiece(place.y,place.x)
 end
 
 function getpiece(y,x)
-local r=board[y]
-if not r then
-return 0
-end
-if not r[x] then
-return 0
-end
-return r[x]
+ local r=board[y]
+ if not r then
+  return 0
+ end
+ if not r[x] then
+  return 0
+ end
+ return r[x]
 end
 
 function update_pieces()
@@ -203,9 +204,11 @@ for k,seq in pairs(blow) do
 end
 
 if blewup then
+ --if things blew up, need to
+ --check if things will fall
  anim(physics,nil,nil,65)
- return
 elseif #victory > 0 then
+ --gameover!!!
  anim(function()end,nil,function()
   print("heyy")
  end,100)
@@ -236,29 +239,33 @@ end
 end
 
 if fell then
+ --if something fell, need to
+ --check if things keep falling
  anim(physics,nil,nil,fell+5)
 else
+ --if nothing fell, need to
+ --check if things can blow up
  update_pieces()
 end
 
 end
 
 function part()
-local p=parts[lpart]
-p.dead=false
-lpart=(lpart+1)%#parts+1
-return p
+ local p=parts[lpart]
+ p.dead=false
+ lpart=(lpart+1)%#parts+1
+ return p
 end
 
 function anim(done,under,above,duration)
-add(anims,{
-done=done,
-t=duration,
-d=duration,
-under=under,
-above=above,
-p=0
-})
+ add(anims,{
+  done=done,
+  t=duration,
+  d=duration,
+  under=under,
+  above=above,
+  p=0
+ })
 end
 
 function blowup(y,x,t)
@@ -281,7 +288,6 @@ function blowup(y,x,t)
  p.r=16
  p.vx=0
  p.vy=0
- 
  
  for i=0,10 do
  local p2=part()
@@ -311,6 +317,7 @@ mode = "drop"
 modes.wait={
 u=function()
 if #anims == 0 then
+ --next turn
  place.turn=(place.turn%2)+1
  if curpiece() > 0 then
   mode="pick"
@@ -324,7 +331,7 @@ for k,a in pairs(anims) do
  a.t-=1
  a.p=1-a.t/a.d
  if a.t<=0 then
-  a:done()
+  a.done()
   del(anims,a)
  end
 end
@@ -345,7 +352,7 @@ end
 modes.drop={
 u=function()
 if move() then
- if board[place.y][place.x] > 0 then
+ if getpiece(place.y,place.x) > 0 then
   mode="pick"
  end
  return
@@ -381,7 +388,7 @@ if press() then
   colpal(place.turn)
   spr(3,place.x*16,lerp(-16,dropy*16,self.p^2),2,2)
  end,
- empty,
+ nil,
  dropy*2+10)
  
  mode="wait"
@@ -409,7 +416,7 @@ end
 modes.pick={
 u=function()
 if move() then
- if board[place.y][place.x] == 0 then
+ if getpiece(place.y,place.x) == 0 then
   mode="drop"
  end
  return
@@ -437,11 +444,10 @@ local ox=place.x
 local oy=place.y
 if move(true) then
  --try to swap pieces
- local t=curpiece()
- if (ox~=place.x or oy~=place.y) and t > 0 then
+ local b=curpiece()
+ if (ox~=place.x or oy~=place.y) and b>0 then
   --swap
   local a=modes.swap.piece
-  local b=board[place.y][place.x]
   board[place.y][place.x]=0
   board[oy][ox]=0
   anim(function()
@@ -463,7 +469,7 @@ if move(true) then
     lerp(oy,place.y,p),
 				a)
   end,
-  20)
+  16)
   mode="wait"
  else
   --invalid
@@ -486,11 +492,10 @@ d=function()
  
  local y = place.y
  local x = place.x
- colpal(modes.swap.piece)
- spr(3,
- x*16+.5+cos(t()),
- y*16+.5+sin(t()),
- 2,2)
+ draw_piece(
+ x+(.5+cos(t()))/16,
+ y+(.5+sin(t()))/16,
+ modes.swap.piece)
  colpal(place.turn)
  local a=t()
  if getpiece(y-1,x) > 0 then
@@ -576,20 +581,20 @@ local d={
 0b1111111111111111.1,
 0b1111111111111111.1
 }
-_fillp(d[flr(min(max(0,f),1)*#d)])
+_fillp(d[flr(mid(0,f,1)*#d)])
 end
 -->8
 --input
 
 function move(nowrap)
 if btnp(⬅️) then
-place.x-=1
+ place.x-=1
 elseif btnp(➡️) then
-place.x+=1
+ place.x+=1
 elseif btnp(⬆️) then
-place.y-=1
+ place.y-=1
 elseif btnp(⬇️) then
-place.y+=1
+ place.y+=1
 else
  return false
 end
@@ -606,7 +611,7 @@ return true
 end
 
 function press()
-return btnp(❎) or btnp(🅾️)
+ return btnp(❎) or btnp(🅾️)
 end
 __gfx__
 000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001cdcdcdcdcdcdcdcdcdcdcdcdcd100
