@@ -13,6 +13,15 @@ function _init()
    r[x]=0
   end
  end
+ 
+ --[[
+ --perftest
+ for x=0,7 do
+  for y=7,0,-1 do
+   board[y][x]=flr(rnd(2)+1)
+  end
+ end
+ --]]
 
  place={
   x=0,
