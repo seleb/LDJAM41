@@ -210,8 +210,8 @@ for k,seq in pairs(blow) do
     end,function(self)
     end,function(self)
      draw_piece(
-      spot.x+(rnd()-.5)*.2*self.p,
-      spot.y+(rnd()-.5)*.2*self.p,
+      spot.x+.5/16+(rnd()-.5)*.3*max(0,self.p-.25),
+      spot.y+.5/16+(rnd()-.5)*.3*max(0,self.p-.25),
       c)
      line(
       front.x*16+6+rnd(4),
@@ -239,8 +239,8 @@ for k,seq in pairs(victory) do
    board[spot.y][spot.x]=p
   end,nil,function(self)
    draw_piece(
-    spot.x+(rnd()-.5)*.2*self.p,
-    spot.y+(rnd()-.5)*.2*self.p,
+    spot.x,
+    spot.y,
     3)
    line(
     front.x*16+6+rnd(4),
