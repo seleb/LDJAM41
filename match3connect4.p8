@@ -560,12 +560,16 @@ d=function()
  64,64+32,7)
  
  printc(
- "match 3+ to destroy pieces",
+ "match 3+ to earn swaps",
  64,64+42,7)
  
  printc(
  "connect exactly 4 to win",
  64,64+52,7)
+ 
+ printc(
+ "<-- remaining swaps -->",
+ 64,5,7)
 end
 }
 
