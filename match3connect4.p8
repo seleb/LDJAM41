@@ -439,6 +439,8 @@ mode = "wait"
 modes.win={
 u=function()
  if press() then
+  turns[1]=0
+  turns[2]=0
   music(3)
   local d=0
   for y=0,7 do
@@ -592,11 +594,7 @@ if #anims == 0 then
  --next turn
  anim(function()
   sfx(5)
-  if turns[place.turn] > 0 then
-   turns[place.turn] -= 1
-  else
    place.turn=(place.turn%2)+1
-  end
   if curpiece() > 0 then
    mode="pick"
   else
@@ -699,6 +697,11 @@ if move() then
 end
 
 if press() then
+ if turns[place.turn]==0 then
+  --no swap!
+  sfx(8)
+  return
+ end
  --select a piece to swap
  modes.swap.piece=curpiece()
  board[place.y][place.x]=0
@@ -739,6 +742,7 @@ if move(true) then
  local b=curpiece()
  if (ox~=place.x or oy~=place.y) and b>0 then
   --swap
+  turns[place.turn]-=1
   local a=modes.swap.piece
   board[place.y][place.x]=0
   board[oy][ox]=0
@@ -876,9 +880,9 @@ function draw_board(neutral)
  end
  map()
  colpal(1)
- printc("+"..turns[1],5,5,7,6)
+ printc("+"..turns[1],8,5,7,6)
  colpal(2)
- printc("+"..turns[2],128-5,5,7,6)
+ printc("+"..turns[2],128-8,5,7,6)
 end
 
 function draw_selector()
