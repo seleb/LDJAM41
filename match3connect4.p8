@@ -581,8 +581,9 @@ d=function()
  for y=t()%2-2,dropy-.5 do
  rect(x,y*16,x+1,min(dropy*16-8,(y+.4)*16),light)
  end
- spr(0+t()*3%2,place.x*16+4,dropy*16-12)
  fillp()
+ 
+ spr(0+t()*3%2,place.x*16+4,dropy*16-12)
  
  draw_board()
  draw_selector()
@@ -612,6 +613,7 @@ d=function()
  draw_pieces()
  draw_board()
  draw_selector()
+ spr(0+t()*3%2,place.x*16+4,place.y*16+4)
 end
 }
 
