@@ -45,14 +45,13 @@ placel={x=0,y=0}
 add(lerps,{place,placel,.2})
 
 anims={}
-empty=function()end
 end
 
 function _draw()
- --cls()
- for i=0,999 do
- circ(rnd(128),rnd(128),2,0)
+ for i=0,500 do
+ circ(i%128,rnd(128),2,0)
  end
+ 
  modes[mode].d()
  draw_parts()
 end
@@ -109,7 +108,6 @@ return r[x]
 end
 
 function update_pieces()
-local stable=true
 local blow={}
 paths={}
 --horizontal
@@ -168,39 +166,81 @@ for k,path in pairs(paths) do
  end
 end
 
+local blewup=false
+local victory={}
 for k,seq in pairs(blow) do
-for l,spot in pairs(seq) do
  if #seq ~= 4 then
-  board[spot.y][spot.x]=0
-  stable=false
+  --blow em up
+  local front=seq[1]
+  local back=seq[#seq]
+  for l,spot in pairs(seq) do
+   if getpiece(spot.y,spot.x)>0 then
+    local c=getpiece(spot.y,spot.x)
+    board[spot.y][spot.x]=0
+    anim(function()
+     blowup(spot.y,spot.x,c)
+    end,function(self)
+    end,function(self)
+     colpal(c)
+     draw_piece(
+      spot.x+(rnd()-.5)*.2*self.p,
+      spot.y+(rnd()-.5)*.2*self.p,
+      c)
+     line(
+      front.x*16+6+rnd(4),
+      front.y*16+6+rnd(4),
+      back.x*16+6+rnd(4),
+      back.y*16+6+rnd(4),
+      col[c][flr(rnd(2))+1])
+    end,60)
+    blewup=true
+   end
+  end
+ else
+  --queue victory
+  add(victory,seq)
  end
 end
+
+if blewup then
+ anim(physics,nil,nil,65)
+ return
+elseif #victory > 0 then
+ anim(function()end,nil,function()
+  print("heyy")
+ end,100)
 end
-
-while not physics() do end
-
-return stable
 
 end
 
 function physics()
 --make pieces fall
-stable=true
+local fell=false
 for x=0,7 do
 for y=6,0,-1 do
  local t=y+1
  if getpiece(y,x)>0 and getpiece(t,x)==0 then
-  board[t][x]=getpiece(y,x)
+  local c=getpiece(y,x)
   board[y][x]=0
-  stable=false
+  anim(function()
+   board[t][x]=c
+  end,function(self)
+   draw_piece(
+    x,
+    lerp(y,t,self.p^2),
+    c)
+  end,nil,8+x-y)
+  fell=max(fell,8+x-y)
  end
 end
 end
-return stable
+
+if fell then
+ anim(physics,nil,nil,fell+5)
+else
+ update_pieces()
 end
 
-function next_turn()
- mode="wait"
 end
 
 function part()
@@ -220,6 +260,48 @@ above=above,
 p=0
 })
 end
+
+function blowup(y,x,t)
+ local p=part()
+ local x=x*16+8
+ local y=y*16+8
+ p.t=3
+ p.x=x
+ p.y=y
+ p.c=col[t][2]
+ p.r=15
+ p.vx=0
+ p.vy=0
+ 
+ p=part()
+ p.t=2
+ p.x=x
+ p.y=y
+ p.c=col[t][1]
+ p.r=16
+ p.vx=0
+ p.vy=0
+ 
+ 
+ for i=0,10 do
+ local p2=part()
+ p=part()
+ p.t=15+rnd(15)
+ p2.t=p.t
+ p.x=x
+ p2.x=p.x
+ p.y=y
+ p2.y=p.y
+ p.vx=rnd(8)-4
+ p2.vx=p.vx
+ p.vy=rnd(8)-4
+ p2.vy=p.vy
+ p.c=col[t][1]
+ p2.c=col[t][2]
+ p.r=rnd(2)
+ p2.r=p.r+1
+ end
+end
 -->8
 --modes
 
@@ -228,12 +310,7 @@ mode = "drop"
 
 modes.wait={
 u=function()
-if #anims == 0 then	
- if not update_pieces() then
-  anim(empty,empty,empty,10)
-  return
- end
-
+if #anims == 0 then
  place.turn=(place.turn%2)+1
  if curpiece() > 0 then
   mode="pick"
@@ -254,13 +331,13 @@ end
 
 end,
 d=function()
- for k,a in pairs(anims) do
-  a:under()
- end
  draw_pieces()
+ for k,a in pairs(anims) do
+  if(a.under)a:under()
+ end
  draw_board()
  for k,a in pairs(anims) do
-  a:above()
+  if(a.above)a:above()
  end
 end
 }
@@ -289,7 +366,16 @@ if press() then
   p.vy=rnd(4)-2
   p.c=col[place.turn][1]
   p.r=rnd(2)
+  if i==0 then
+   p.r+=7
+   p.t=2
+   p.vx=0
+   p.vy=0
+   p.c=col[place.turn][2]
   end
+  end
+  
+  update_pieces()
  end,
  function(self)
   colpal(place.turn)
@@ -361,18 +447,21 @@ if move(true) then
   anim(function()
    board[place.y][place.x]=a
    board[oy][ox]=b
+   update_pieces()
   end,
   function(self)
-   colpal(b)
-   spr(3,
-   lerp(ox,place.x,1-self.p^2)*16,
-   lerp(oy,place.y,1-self.p^2)*16,2,2)
+   local p=1-self.p^2
+   draw_piece(
+    lerp(ox,place.x,p),
+    lerp(oy,place.y,p),
+				b)
    end,
   function(self)
-   colpal(a)
-   spr(3,
-   lerp(ox,place.x,1-(1-self.p)^2)*16,
-   lerp(oy,place.y,1-(1-self.p)^2)*16,2,2)
+   local p=1-(1-self.p)^2
+   draw_piece(
+    lerp(ox,place.x,p),
+    lerp(oy,place.y,p),
+				a)
   end,
   20)
   mode="wait"
@@ -432,27 +521,27 @@ end
 
 function draw_pieces()
  for y=0,7 do
+  local r=board[y]
  for x=0,7 do
-  local p=board[y][x]
+  local p=r[x]
   if p > 0 then
-   colpal(p)
-   spr(3,x*16,y*16,2,2)
+   draw_piece(x,y,p)
   end
  end
  end
 end
 
+function draw_piece(x,y,p)
+ colpal(p)
+ spr(3,x*16,y*16,2,2)
+end
+
 function draw_board()
  colpal(place.turn)
- map()
  if mode=="wait" then
   pal()
  end
- for y=1,7 do
- for x=1,7 do
-  spr(18,x*16-4,y*16-4)
- end
- end
+ map()
 end
 
 function draw_selector()
@@ -466,6 +555,7 @@ function draw_selector()
  fillp()
 end
 
+-- dither helper
 _fillp=fillp
 fillp=function(f)
 local d={
@@ -518,27 +608,6 @@ end
 function press()
 return btnp(❎) or btnp(🅾️)
 end
-
---[[
-
- local p2=part()
- local p=part()
- p.t=15+rnd(15)
- p2.t=p.t
- p.x=place.x*16+8
- p2.x=p.x
- p.y=dropy*16+8
- p2.y=p.y
- p.vx=rnd(4)-2
- p2.vx=p.vx
- p.vy=rnd(4)-2
- p2.vy=p.vy
- p.c=col[place.turn][1]
- p2.c=col[place.turn][2]
- p.r=1
- p2.r=2
- 
-]]
 __gfx__
 000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001cdcdcdcdcdcdcdcdcdcdcdcdcd100
 00000000000000000000000000000666666000000000000000000000000000000000000000000000000000000000000001cdc111111dcdcdcdcdc111111dcd10
@@ -550,14 +619,14 @@ __gfx__
 000000000000000000000000067777777777776000000000000000000000000000000000000000000000000000000000c10000000000001dc10000000000001d
 000000000000000000000000067777777777776000000000000000000000000000000000000000000000000000000000d10000000000001cd10000000000001c
 000660000007700000000000067677777777676000000000000000000000000000000000000000000000000000000000c10000000000001dc10000000000001d
-006776000076670000066000067777777777776000000000000000000000000000000000000000000000000000000000d10000000000001cd10000000000001c
-067777600766667000677600006767777776760000000000000000000000000000000000000000000000000000000000cd100000000001cdcd100000000001cd
-067777600766667000677600006777677677760000000000000000000000000000000000000000000000000000000000dcd1000000001cdcdcd1000000001cdc
-006776000076670000066000000667777776600000000000000000000000000000000000000000000000000000000000cdcd10000001cdcdcdcd10000001cdcd
-000660000007700000000000000006666660000000000000000000000000000000000000000000000000000000000000dcdcd111111cdcdcdcdcd111111cdcdc
-000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd
-000000000007700000066000000770000006600000000000000000000000000000000000000000000000000000000000dcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdc
-000000000076700000676000007667000067760000000000000000000000000000000000000000000000000000000000cdcdc111111dcdcdcdcdc111111dcdcd
+006776000076670000000000067777777777776000000000000000000000000000000000000000000000000000000000d10000000000001cd10000000000001c
+067777600766667000000000006767777776760000000000000000000000000000000000000000000000000000000000cd100000000001cdcd100000000001cd
+067777600766667000000000006777677677760000000000000000000000000000000000000000000000000000000000dcd1000000001cdcdcd1000000001cdc
+006776000076670000000000000667777776600000000000000000000000000000000000000000000000000000000000cdcd10000001cdcdcdcd10000001cdcd
+000660000007700000000000000006666660000000000000000000000000000000000000000000000000000000000000dcdcd111111cdcd66cdcd111111cdcdc
+000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000cdcdcdcdcdcdcd6776cdcdcdcdcdcdcd
+000000000007700000066000000770000006600000000000000000000000000000000000000000000000000000000000dcdcdcdcdcdcdc6776dcdcdcdcdcdcdc
+000000000076700000676000007667000067760000000000000000000000000000000000000000000000000000000000cdcdc111111dcdc66dcdc111111dcdcd
 000000000766777006776660076666700677776000000000000000000000000000000000000000000000000000000000dcdc10000001dcdcdcdc10000001dcdc
 000000007666666767777776766666676777777600000000000000000000000000000000000000000000000000000000cdc1000000001dcdcdc1000000001dcd
 000000007666666767777776777667776667766600000000000000000000000000000000000000000000000000000000dc100000000001dcdc100000000001dc
