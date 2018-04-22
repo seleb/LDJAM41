@@ -28,12 +28,13 @@ function _init()
   y=0,
   turn=1
  }
- col={
-  {8,2},
-  {10,9}
- }
  light=7
  dark=6
+ col={
+  {8,2},
+  {10,9},
+  {light,dark}
+ }
 
  parts={}
  lpart=1
@@ -196,9 +197,9 @@ local blewup=false
 local victory={}
 for k,seq in pairs(blow) do
  if #seq ~= 4 then
+ local front=seq[1]
+ local back=seq[#seq]
   --blow em up
-  local front=seq[1]
-  local back=seq[#seq]
   for l,spot in pairs(seq) do
    if getpiece(spot.y,spot.x)>0 then
     local c=getpiece(spot.y,spot.x)
@@ -207,7 +208,6 @@ for k,seq in pairs(blow) do
      blowup(spot.y,spot.x,c)
     end,function(self)
     end,function(self)
-     colpal(c)
      draw_piece(
       spot.x+(rnd()-.5)*.2*self.p,
       spot.y+(rnd()-.5)*.2*self.p,
@@ -223,8 +223,32 @@ for k,seq in pairs(blow) do
    end
   end
  else
-  --queue victory
   add(victory,seq)
+ end
+end
+
+for k,seq in pairs(victory) do
+ local front=seq[1]
+ local back=seq[#seq]
+ for l,spot in pairs(seq) do
+  local p=getpiece(spot.y,spot.x)
+ if p>0 then
+  board[spot.y][spot.x]=0
+  anim(function()
+   board[spot.y][spot.x]=p
+  end,nil,function(self)
+   draw_piece(
+    spot.x+(rnd()-.5)*.2*self.p,
+    spot.y+(rnd()-.5)*.2*self.p,
+    3)
+   line(
+    front.x*16+6+rnd(4),
+    front.y*16+6+rnd(4),
+    back.x*16+6+rnd(4),
+    back.y*16+6+rnd(4),
+    col[3][flr(rnd(2))+1])
+   end,60)
+  end
  end
 end
 
@@ -234,9 +258,46 @@ if blewup then
  anim(physics,nil,nil,65)
 elseif #victory > 0 then
  --gameover!!!
- anim(function()end,nil,function()
-  print("heyy")
- end,100)
+ anim(function()
+  local vboard={}
+  for y=0,7 do
+   local r={}
+   vboard[y]=r
+  for x=0,7 do
+   r[x]=false
+  end
+  end
+  
+  winner=getpiece(victory[1][1].y,victory[1][1].x)
+  for k,seq in pairs(victory) do
+   if getpiece(seq[1].y,seq[1].x)!=winner then
+    winner=3
+   end
+   for l,p in pairs(seq) do
+    vboard[p.y][p.x]=true
+   end
+  end
+
+  local d=0
+  for y=0,7 do
+  for x=0,7 do
+   local p=getpiece(y,x)
+   if p>0 and not vboard[y][x] then
+    d+=5
+    anim(function()
+     blowup(y,x,p)
+     board[y][x]=0
+    end,nil,nil,
+    d)
+   end
+  end
+  end
+  
+  anim(function()
+   mode="win"
+  end,nil,nil,d+50)
+ 
+ end,nil,nil,65)
 end
 
 end
@@ -338,6 +399,41 @@ end
 
 modes={}
 mode = "wait"
+
+modes.win={
+u=function()
+ if press() then
+ 
+  local d=0
+  for y=0,7 do
+  for x=0,7 do
+   local p=getpiece(y,x)
+   if p>0 then
+    blowup(y,x,p)
+    board[y][x]=0
+   end
+  end
+  end
+  
+  mode="wait"
+ end
+ 
+end,
+d=function()
+ draw_pieces()
+ draw_board(true)
+ 
+ local w={"red wins!","yellow wins!","it's a tie!"}
+ w=w[winner]
+ colpal(winner)
+ for x=-1,1 do
+ for y=-1,1 do
+ print(w,x+64-#w*2,y+64-3,0)
+ end
+ end
+ print(w,64-#w*2,64-3,7)
+end
+}
 
 modes.menu={
 u=function()
