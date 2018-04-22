@@ -254,6 +254,7 @@ for k,seq in pairs(victory) do
 end
 
 if blewup then
+ sfx(12)
  --if things blew up, need to
  --check if things will fall
  anim(physics,nil,nil,65)
@@ -460,11 +461,9 @@ d=function()
 end
 }
 
-modes.menu={
-u=function()
- if press() then
- 
-  local d=0
+menuoptions={
+{"start",function()
+ local d=0
   for y=0,7 do
   for x=0,7 do
    local p=getpiece(y,x)
@@ -483,20 +482,94 @@ u=function()
    mode="drop"
   end,nil,nil,d+50)
   mode="wait"
+end},
+{"how to play",function()mode="howto"end},
+{"about",function()mode="about"end}
+}
+menuoption=0
+modes.menu={
+u=function()
+ if press() then
+  sfx(10)
+  menuoptions[menuoption+1][2]()
+  return
  end
+ 
+ if btnp(⬆️) then
+  menuoption-=1
+  sfx(10)
+ elseif btnp(⬇️) then
+  menuoption+=1
+  sfx(10)
+ end
+ menuoption%=#menuoptions
 end,
 d=function()
  draw_pieces()
  draw_board(true)
  draw_menu(0)
  
- for x=-1,1 do
- for y=-1,1 do
- print("press 🅾️/❎ to start",x+64-20*2,y+64+32-3,0)
+ for i=1,#menuoptions do
+  local m=menuoptions[i]
+  local s
+  if i==menuoption+1 then
+   s="> "..m[1].." <"
+   colpal(flr(t()*2%2+1))
+  else
+   s=m[1]
+   pal()
+  end
+  printc(s,64,64+22+10*i,7)
  end
- end
- print("press 🅾️/❎ to start",64-20*2,64+32-3,7)
+end
+}
 
+modes.howto={
+u=function()
+if press() then
+ mode="menu"
+ sfx(10)
+end
+end,
+d=function()
+ draw_pieces()
+ draw_board(true)
+ draw_menu(0)
+ 
+ pal()
+ printc(
+ "drop pieces in empty slots",
+ 64,64+22,7)
+ printc(
+ "swap pieces in filled slots",
+ 64,64+32,7)
+ 
+ printc(
+ "match 3+ to destroy pieces",
+ 64,64+42,7)
+ 
+ printc(
+ "connect exactly 4 to win",
+ 64,64+52,7)
+end
+}
+
+modes.about={
+u=function()
+if press() then
+ mode="menu"
+ sfx(10)
+end
+end,
+d=function()
+ draw_pieces()
+ draw_board(true)
+ draw_menu(0)
+ 
+ pal()
+ printc("made by @seansleblanc",64,64+32,7)
+ printc("for ludum dare 41",64,64+42,7)
+ printc("with pico-8",64,64+52,7)
 end
 }
 
@@ -821,6 +894,15 @@ local d={
 }
 _fillp(d[flr(mid(0,f,1)*#d)])
 end
+
+function printc(s,x,y,c,o)
+ for z=-1,1 do
+ for w=-1,1 do
+ print(s,x+z-#s*2,y+w-3,o or 0)
+ end
+ end
+ print(s,x-#s*2,y-3,c)
+end
 -->8
 --input
 
@@ -914,7 +996,7 @@ __sfx__
 0002000015014150111502116031170411c041220312c035000000000100001000010000100001000010000100001000010000100001000010000100001000010000100001000010000100001000010000100001
 000500001354300503005030050300503005030050300503005030050300503005030050300503005030050300503005030050300503005030050300503005030050300503005030050300503005030050300503
 000200002d014230111d0211803116041160411603114035000000000100001000010000100001000010000100001000010000100001000010000100001000010000100001000010000100001000010000100001
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0110000002601036010461105611086210b6310e64100000000010000100001000010000100001000010000100001000010000100001000010000100001000010000100001000010000100001000010000100001
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
