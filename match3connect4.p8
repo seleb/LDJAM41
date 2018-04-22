@@ -20,6 +20,41 @@ function _init()
     board[y][x]=flr(rnd(2)+1)
    end
  end
+ 
+ paths={}
+--horizontal
+for y=0,7 do
+local p={}
+for x=0,7 do
+ add(p,{x=x,y=y})
+end
+add(paths,p)
+end
+--vertical
+for x=0,7 do
+local p={}
+for y=0,7 do
+ add(p,{x=x,y=y})
+end
+add(paths,p)
+end
+--diag
+for y=-7,7 do
+local p1={}
+local p2={}
+local p3={}
+local p4={}
+for a=0,y do
+ add(p1,{y=y-a,x=a})
+ add(p2,{y=7-y+a,x=7-a})
+ add(p3,{y=y-a,x=7-a})
+ add(p4,{y=7-y+a,x=a})
+end
+add(paths,p1)
+add(paths,p2)
+add(paths,p3)
+add(paths,p4)
+end
 
  place={
   x=0,
@@ -49,6 +84,7 @@ function _init()
   }
  end
 
+ turns={0,0}
  lerps={}
  placel={x=0,y=0}
  add(lerps,{place,placel,.2})
@@ -141,42 +177,7 @@ function getpiece(y,x)
 end
 
 function update_pieces()
-local blow={}
-paths={}
---horizontal
-for y=0,7 do
-local p={}
-for x=0,7 do
- add(p,{x=x,y=y})
-end
-add(paths,p)
-end
---vertical
-for x=0,7 do
-local p={}
-for y=0,7 do
- add(p,{x=x,y=y})
-end
-add(paths,p)
-end
---diag
-for y=-7,7 do
-local p1={}
-local p2={}
-local p3={}
-local p4={}
-for a=0,y do
- add(p1,{y=y-a,x=a})
- add(p2,{y=7-y+a,x=7-a})
- add(p3,{y=y-a,x=7-a})
- add(p4,{y=7-y+a,x=a})
-end
-add(paths,p1)
-add(paths,p2)
-add(paths,p3)
-add(paths,p4)
-end
-
+local seqs={}
 for k,path in pairs(paths) do
  local last=nil
  local cur=nil
@@ -187,7 +188,7 @@ for k,path in pairs(paths) do
   cur=getpiece(y,x)
   if last~=nil and cur~=last then
    if last~=0 and #seq >= 3 then
-    add(blow,seq)
+    add(seqs,seq)
    end
    seq={}
   end
@@ -195,17 +196,27 @@ for k,path in pairs(paths) do
   last=cur
  end
  if last~=0 and #seq >= 3 then
-  add(blow,seq)
+  add(seqs,seq)
  end
 end
 
-local blewup=false
+local blow={}
 local victory={}
-for k,seq in pairs(blow) do
+local blewup=false
+for k,seq in pairs(seqs) do
  if #seq ~= 4 then
+  turns[getpiece(seq[1].y,seq[1].x)]+=1
+  add(blow,seq)
+  blewup=true
+ else
+  add(victory,seq)
+ end
+end
+
+--blow em up
+for k,seq in pairs(blow) do
  local front=seq[1]
  local back=seq[#seq]
-  --blow em up
   for l,spot in pairs(seq) do
    if getpiece(spot.y,spot.x)>0 then
     local c=getpiece(spot.y,spot.x)
@@ -225,14 +236,11 @@ for k,seq in pairs(blow) do
       back.y*16+6+rnd(4),
       col[c][flr(rnd(2))+1])
     end,60)
-    blewup=true
    end
   end
- else
-  add(victory,seq)
- end
 end
 
+--victory???
 for k,seq in pairs(victory) do
  local front=seq[1]
  local back=seq[#seq]
@@ -583,8 +591,12 @@ u=function()
 if #anims == 0 then
  --next turn
  anim(function()
-  place.turn=(place.turn%2)+1
   sfx(5)
+  if turns[place.turn] > 0 then
+   turns[place.turn] -= 1
+  else
+   place.turn=(place.turn%2)+1
+  end
   if curpiece() > 0 then
    mode="pick"
   else
@@ -863,6 +875,10 @@ function draw_board(neutral)
   pal()
  end
  map()
+ colpal(1)
+ printc("+"..turns[1],5,5,7,6)
+ colpal(2)
+ printc("+"..turns[2],128-5,5,7,6)
 end
 
 function draw_selector()
