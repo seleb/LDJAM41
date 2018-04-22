@@ -79,6 +79,11 @@ function _draw()
   circ(i%128,rnd(128),2,0)
  end
  
+ pal(12,1)
+ pal(13,1)
+ map(0,0,1,-2)
+ pal()
+ 
  modes[mode].d()
  draw_parts()
  camera()
