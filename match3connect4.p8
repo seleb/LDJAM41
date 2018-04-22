@@ -333,6 +333,7 @@ end
 
 if fell then
  sfx(3)
+ camera(0,1)
  --if something fell, need to
  --check if things keep falling
  anim(physics,nil,nil,fell+5)
