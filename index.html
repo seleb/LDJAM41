@@ -1,0 +1,459 @@
+﻿<html>
+    <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>MATCH3+CONNECT4</title>
+</head>
+
+<body>
+	<canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+
+	<script type="text/javascript">
+		var canvas = document.getElementById("canvas");
+		canvas.width = window.innerWidth;
+		canvas.height = window.innerHeight;
+
+		// show Emscripten environment where the canvas is
+		// arguments are passed to PICO-8
+		
+		var Module = {};
+		Module.canvas = canvas;
+		var c=setInterval(function(){
+			// console.log(Module.calledRun);
+			if(Module.calledRun){
+				clearInterval(c);
+				new WebGLazy({
+					background:'#000',
+					scaleMode:WebGLazy.SCALE_MODES.MULTIPLES,
+					disableFeedbackTexture:true,
+					disableMouseEvents:true
+				});
+			}
+		},-1);
+	</script>
+	<script>
+		var gamepads = {
+			// XBOX360 wired controller configuration
+			// buttons
+			A: 0,
+			X: 2,
+			B: 1,
+			Y: 3,
+			LB: 4,
+			RB: 5,
+			LT: 6,
+			RT: 7,
+			BACK: 8,
+			START: 9,
+			LHAT: 10,
+			RHAT: 11,
+			DPAD_UP: 12,
+			DPAD_DOWN: 13,
+			DPAD_LEFT: 14,
+			DPAD_RIGHT: 15,
+
+			// axes
+			LSTICK_H: 0,
+			LSTICK_V: 1,
+			RSTICK_H: 2,
+			RSTICK_V: 3,
+
+
+			players: [],
+
+			available: false,
+			pollEveryFrame: false,
+			connected: false,
+			deadZone: 0.25, // if abs(an axis value) is < deadZone, returns 0 instead
+			snapZone: 0.25, // if abs(1-an axis value) is < snapZone, returns 1 instead
+
+			init: function () {
+				if (navigator.getGamepads) {
+					this.available = true;
+				} else if (navigator.webkitGetGamepads) {
+					navigator.getGamepads = navigator.webkitGetGamepads;
+					this.available = true;
+				}
+
+				if (this.available) {
+					console.log("Gamepad API available");
+					if (navigator.userAgent.indexOf('Firefox/') != -1) {
+						// listen to connection events for firefox
+						window.addEventListener("gamepadconnected", function (event) {
+							console.log("gamepad connection event");
+							this.pollconnections(event);
+						}.bind(this));
+						window.addEventListener("gamepaddisconnected", function (event) {
+							console.log("gamepad connection event");
+							this.pollconnections(event);
+						}.bind(this));
+					} else {
+						this.pollEveryFrame = true;
+					}
+				} else {
+					console.error("Gamepad API not available");
+				}
+			},
+
+			pollconnections: function (event) {
+				this.connected = false;
+
+				// assume existing players' gamepads aren't enabled until they're found
+				for (var i = 0; i < this.players.length; ++i) {
+					if (this.players[i]) {
+						this.players[i].disabled = true;
+					}
+				}
+
+				var gps = navigator.getGamepads();
+				for (var i = 0; i < gps.length; ++i) {
+					var gp = gps[i];
+					if (gp) {
+						if (gp.connected) {
+							if (this.players[gp.index] == null) {
+								// new player
+								gp.down = [];
+								gp.justDown = [];
+								gp.justUp = [];
+								gp.axesPrev = [];
+								this.players[gp.index] = gp;
+							} else {
+								// returning player, copy old button states before replacing
+								gp.down = this.players[gp.index].down;
+								gp.justDown = this.players[gp.index].justDown;
+								gp.justUp = this.players[gp.index].justUp;
+								gp.axesPrev = this.players[gp.index].axesPrev;
+								this.players[gp.index] = gp;
+							}
+							this.connected = true;
+							this.players[gp.index].disabled = false;
+						} else {
+							this.players[gp.index] = null;
+						}
+					}
+				}
+			},
+
+			update: function () {
+				// store the previous axis values
+				// has to be done before pollConnections since that will get the new axis values
+				for (var i = 0; i < this.players.length; ++i) {
+					var p = this.getPlayer(i);
+					p.axesPrev = p.axes.slice();
+				}
+
+				// poll connections and update gamepad states every frame because chrome's a lazy bum
+				if (this.pollEveryFrame) {
+					this.pollconnections();
+				}
+
+				for (var i = 0; i < this.players.length; ++i) {
+					var p = this.getPlayer(i);
+					if (p && p != null) {
+						for (var j = 0; j < p.buttons.length; ++j) {
+							if (p.buttons[j].pressed) {
+								p.justDown[j] = !(p.down[j] === true);
+								p.down[j] = true;
+								p.justUp[j] = false;
+							} else {
+								p.justUp[j] = p.down[j] === true;
+								p.down[j] = false;
+								p.justDown[j] = false;
+							}
+						}
+					}
+
+				}
+			},
+
+			// returns _player's gamepad
+			// if one doesn't exist, returns an object with gamepad properties reflecting a null state
+			getPlayer: function (_player) {
+				if (this.players[_player] && this.players[_player].connected && !this.players[_player].disabled) {
+					return this.players[_player];
+				} else {
+					return {
+						connected: false,
+						disabled: true,
+						down: [],
+						justDown: [],
+						justUp: [],
+						axes: [],
+						axesPrev: [],
+						buttons: []
+					};
+				}
+			},
+
+			// returns an array representing _length axes for _player at _offset
+			// if abs(an axis value) is < deadZone, returns 0 instead
+			// if abs(1-an axis value) is < snapZone, returns 1/-1 instead
+			// otherwise, returns the axis value, normalized between deadZone and (1-snapZone)
+			// if _offset isn't set, sets to 0
+			// if _length isn't set, sets to 2
+			// if _player isn't set (or -1), returns the sum of everyone's axes
+			// if _prev is set and true, uses the axis values from the previous frame instead of the current one
+			getAxes: function (_offset, _length, _player, _prev) {
+				if (arguments.length < 4) {
+					_prev = false;
+					if (arguments.length < 3) {
+						_player = -1;
+						if (arguments.length < 2) {
+							_length = 2;
+							if (arguments.length < 1) {
+								_offset = 0;
+							}
+						}
+					}
+				}
+
+				var axes = [];
+				for (var i = 0; i < _length; ++i) {
+					axes[i] = 0;
+				}
+				if (_player == -1) {
+					for (var i = 0; i < this.players.length; ++i) {
+						var a = this.getAxes(_offset, _length, i, _prev);
+						for (var j = 0; j < a.length; ++j) {
+							axes[j] += a[j];
+						}
+					}
+				} else {
+					var p = this.getPlayer(_player);
+					var a = _prev ? p.axesPrev : p.axes;
+					a = a.slice(_offset, _offset + _length);
+					for (var i = 0; i < a.length; ++i) {
+						if (Math.abs(a[i]) < this.deadZone) {
+							axes[i] += 0;
+						} else if (Math.abs(1.0 - a[i]) < this.snapZone) {
+							axes[i] += 1;
+						} else if (Math.abs(-1.0 - a[i]) < this.snapZone) {
+							axes[i] -= 1;
+						} else {
+							axes[i] += Math.sign(a[i]) * (Math.abs(a[i]) - this.deadZone) / (1.0 - this.snapZone - this.deadZone);
+						}
+					}
+				}
+				return axes;
+			},
+			// returns getAxes(_axis,1,_player)[0]
+			// if _player isn't set, returns the sum of everyone's axis
+			// if _prev is set and true, uses the axis values from the previous frame instead of the current one
+			getAxis: function (_axis, _player, _prev) {
+				if (arguments.length < 3) {
+					_prev = false;
+					if (arguments.length < 2) {
+						_player = -1;
+					}
+				}
+				return this.getAxes(_axis, 1, _player, _prev)[0];
+			},
+
+			// returns true if _axis is past _threshold in _direction
+			// if _direction isn't set, assumes the sign of _theshold is the direction (e.g. if the theshold is -0.5, it will check if _axis is < -0.5)
+			// if _player isn't set, returns true for any player
+			// if _prev is set and true, uses the axis values from the previous frame instead of the current one
+			axisPast: function (_axis, _threshold, _direction, _player, _prev) {
+				if (arguments.length < 5) {
+					_prev = false;
+					if (arguments.length < 4) {
+						_player = -1;
+						if (arguments.length < 3) {
+							_direction = Math.sign(_threshold);
+							if (arguments.length < 2) {
+								console.error("must specify axis and threshold");
+							}
+						}
+					}
+				}
+
+				var a = this.getAxis(_axis, _player, _prev);
+
+
+
+				if (_direction < 0) {
+					return a < _threshold;
+				} else if (_direction > 0) {
+					return a > _threshold;
+				} else {
+					console.error("direction can't be zero");
+				}
+			},
+			// returns true if _axis is past _threshold in _direction and WAS NOT in previous update
+			// if _direction isn't set, assumes the sign of _theshold is the direction (e.g. if the theshold is -0.5, it will check if _axis is < -0.5)
+			// if _player isn't set, returns true for any player
+			axisJustPast: function (_axis, _threshold, _direction, _player) {
+				if (arguments.length < 4) {
+					_player = -1;
+					if (arguments.length < 3) {
+						_direction = Math.sign(_threshold);
+						if (arguments.length < 2) {
+							console.error("must specify axis and threshold");
+						}
+					}
+				}
+				return this.axisPast(_axis, _threshold, _direction, _player, false) && !this.axisPast(_axis, _threshold, _direction, _player, true);
+			},
+
+			// returns [x,y] representing the dpad for _player
+			// if _player isn't set (or -1), returns the sum of everyone's dpads
+			getDpad: function (_player) {
+				if (arguments.length < 1) {
+					_player = -1;
+				}
+				var dpad = [0, 0];
+				if (_player == -1) {
+					for (var i = 0; i < this.players.length; ++i) {
+						var d = this.getDpad(i);
+						dpad[0] += d[0];
+						dpad[1] += d[1];
+					}
+				} else {
+					if (this.isDown(this.DPAD_RIGHT, _player)) {
+						dpad[0] += 1;
+					}
+					if (this.isDown(this.DPAD_LEFT, _player)) {
+						dpad[0] -= 1;
+					}
+					if (this.isDown(this.DPAD_UP, _player)) {
+						dpad[1] += 1;
+					}
+					if (this.isDown(this.DPAD_DOWN, _player)) {
+						dpad[1] -= 1;
+					}
+				}
+				return dpad;
+			},
+
+			// returns true if _player's _btn is currently down
+			// if _player isn't set (or -1), returns true for any player
+			isDown: function (_btn, _player) {
+				if (arguments.length < 2) {
+					_player = -1;
+					if (arguments.length < 1) {
+						console.error("must specify a button");
+					}
+				}
+				if (_player == -1) {
+					for (var i = 0; i < this.players.length; ++i) {
+						if (this.isDown(_btn, i)) {
+							return true;
+						}
+					}
+					return false;
+				} else {
+					return this.getPlayer(_player).down[_btn] === true;
+				}
+			},
+
+			// returns true if _player's _btn is not currently down
+			// if _player isn't set (or -1), returns true for any player
+			isUp: function (_btn, _player) {
+				return !this.isDown(_btn, _player);
+			},
+
+			// returns true if _player's _btn is currently down and WAS NOT down in previous update
+			// if _player isn't set (or -1), returns true for any player
+			isJustDown: function (_btn, _player) {
+				if (arguments.length < 2) {
+					_player = -1;
+					if (arguments.length < 1) {
+						console.error("must specify a button");
+					}
+				}
+				if (_player == -1) {
+					for (var i = 0; i < this.players.length; ++i) {
+						if (this.isJustDown(_btn, i)) {
+							return true;
+						}
+					}
+					return false;
+				} else {
+					return this.getPlayer(_player).justDown[_btn] === true;
+				}
+			},
+
+			// returns true if _player's _btn is currently NOT down and WAS down in previous update
+			// if _player isn't set (or -1), returns true for any player
+			isJustUp: function (_btn, _player) {
+				if (arguments.length < 2) {
+					_player = -1;
+					if (arguments.length < 1) {
+						console.error("must specify a button");
+					}
+				}
+				if (_player == -1) {
+					for (var i = 0; i < this.players.length; ++i) {
+						if (this.isJustUp(_btn, i)) {
+							return true;
+						}
+					}
+					return false;
+				} else {
+					return this.getPlayer(_player).justUp[_btn] === true
+				};
+			}
+		};
+	</script>
+	<script>
+		var pico8_buttons = [0, 0, 0, 0, 0, 0, 0, 0];
+
+		gamepads.init();
+
+		if (gamepads.available) {
+			var thresh = (gamepads.deadZone + gamepads.snapZone) / 2;
+
+			function pushGamepadToButtons() {
+
+				var stick = gamepads.getAxes(0, 2);
+				var dpad = gamepads.getDpad();
+				var btns = [
+					stick[0] < -thresh || dpad[0] < -thresh,
+					stick[0] > thresh || dpad[0] > thresh,
+					stick[1] < -thresh || dpad[1] > thresh,
+					stick[1] > thresh || dpad[1] < -thresh,
+					gamepads.isDown(gamepads.A) || gamepads.isDown(gamepads.Y),
+					gamepads.isDown(gamepads.B) || gamepads.isDown(gamepads.X),
+					gamepads.isDown(gamepads.START) || gamepads.isDown(gamepads.BACK)
+				];
+
+				var input = 0;
+				for (var i = 0; i < btns.length; ++i) {
+					if (btns[i]) {
+						input |= Math.pow(2, i);
+					}
+				}
+				pico8_buttons[0] = input;
+
+				requestAnimationFrame(pushGamepadToButtons);
+				gamepads.update();
+			}
+			pushGamepadToButtons();
+		}
+	</script>
+
+	<script async type="text/javascript" src="index.js"></script>
+	  
+	<script>
+		// key blocker. prevent cursor keys from scrolling page while playing cart.
+		
+		function onKeyDown_blocker(event) {
+			event = event || window.event;
+			var o = document.activeElement;
+			if (!o || o == document.body || o.tagName == "canvas")
+			{
+				if ([32, 37, 38, 39, 40].indexOf(event.keyCode) > -1)
+				{
+					if (event.preventDefault) event.preventDefault();
+				}
+			}
+		}
+
+		document.addEventListener('keydown', onKeyDown_blocker, false);
+
+	</script>
+
+	<script>
+		!function(t,e){for(var i in e)t[i]=e[i]}(window,function(t){var e={};function i(s){if(e[s])return e[s].exports;var o=e[s]={i:s,l:!1,exports:{}};return t[s].call(o.exports,o,o.exports,i),o.l=!0,o.exports}return i.m=t,i.c=e,i.d=function(t,e,s){i.o(t,e)||Object.defineProperty(t,e,{configurable:!1,enumerable:!0,get:s})},i.r=function(t){Object.defineProperty(t,"__esModule",{value:!0})},i.n=function(t){var e=t&&t.__esModule?function(){return t.default}:function(){return t};return i.d(e,"a",e),e},i.o=function(t,e){return Object.prototype.hasOwnProperty.call(t,e)},i.p="",i(i.s=0)}([function(t,e,i){"use strict";function s(t){if(!s.context&&(s.context=t.getContext("webgl")||t.getContext("experimental-webgl"),!s.context))throw"No WebGL support";return s.context}function WebGLazy(t){this.options=t||{},this.sources=this.options.sources||["canvas","video","img"],this.source=this.options.source||this.getSource(),this.hideSource=void 0===this.options.hideSource||this.options.hideSource,this.background=this.options.background||"black",this.scaleMultiplier=this.options.scaleMultiplier||1,this.scaleMode=void 0!==this.options.scaleMode?this.options.scaleMode:this.constructor.SCALE_MODES.FIT,this.allowDownscaling=this.options.allowDownscaling||!1,this.timestep=this.options.timestep||1/60*1e3,this.disableFeedbackTexture=!!this.options.disableFeedbackTexture,this.disableMouseEvents=!!this.options.disableMouseEvents,(void 0===this.options.autoInit||this.options.autoInit)&&this.init()}i.r(e),i.d(e,"WebGLazy",function(){return WebGLazy}),s.Shader=function(t,e){this.gl=new s,this.vertSource=t,this.fragSource=e,this.program=this.gl.createProgram();try{this.vertShader=this.compileShader(this.vertSource,this.gl.VERTEX_SHADER),this.fragShader=this.compileShader(this.fragSource,this.gl.FRAGMENT_SHADER)}catch(t){throw this.gl.deleteProgram(this.program),delete this.program,console.error("Couldn't create shader: ",t),t}this.gl.attachShader(this.program,this.vertShader),this.gl.deleteShader(this.vertShader),delete this.vertShader,this.gl.attachShader(this.program,this.fragShader),this.gl.deleteShader(this.fragShader),delete this.fragShader,this.gl.linkProgram(this.program)},s.Shader.prototype.compileShader=function(t,e){try{var i=this.gl.createShader(e);if(this.gl.shaderSource(i,t),this.gl.compileShader(i),!this.gl.getShaderParameter(i,this.gl.COMPILE_STATUS))throw this.gl.getShaderInfoLog(i);return i}catch(i){throw console.error("Couldn't compile shader ("+e+"): ",t,i),i}},s.Shader.prototype.useProgram=function(){this.gl.useProgram(this.program)},s.Texture=function(t,e){this.gl=new s,this.source=t,this.texture=this.gl.createTexture(),this.bind(e),this.gl.texImage2D(this.gl.TEXTURE_2D,0,this.gl.RGBA,this.gl.RGBA,this.gl.UNSIGNED_BYTE,this.source),this.gl.pixelStorei(this.gl.UNPACK_FLIP_Y_WEBGL,!0),this.gl.texParameteri(this.gl.TEXTURE_2D,this.gl.TEXTURE_MAG_FILTER,this.gl.NEAREST),this.gl.texParameteri(this.gl.TEXTURE_2D,this.gl.TEXTURE_MIN_FILTER,this.gl.NEAREST),this.gl.texParameteri(this.gl.TEXTURE_2D,this.gl.TEXTURE_WRAP_S,this.gl.CLAMP_TO_EDGE),this.gl.texParameteri(this.gl.TEXTURE_2D,this.gl.TEXTURE_WRAP_T,this.gl.CLAMP_TO_EDGE),this.gl.bindTexture(this.gl.TEXTURE_2D,null)},s.Texture.prototype.update=function(){this.bind(),this.gl.pixelStorei(this.gl.UNPACK_FLIP_Y_WEBGL,!0),this.gl.texImage2D(this.gl.TEXTURE_2D,0,this.gl.RGBA,this.gl.RGBA,this.gl.UNSIGNED_BYTE,this.source),this.gl.bindTexture(this.gl.TEXTURE_2D,null)},s.Texture.prototype.bind=function(t){var e=t||this.lastBoundId||0;this.gl.activeTexture(this.gl.TEXTURE0+e),this.gl.bindTexture(this.gl.TEXTURE_2D,this.texture),this.lastBoundId=e},WebGLazy.SCALE_MODES=Object.freeze({FIT:"FIT",COVER:"COVER",MULTIPLES:"MULTIPLES",NONE:"NONE"}),WebGLazy.prototype.getSource=function(){var t,e=[];for(t=0;t<this.sources.length;++t)e.push(Array.prototype.slice.call(document.getElementsByTagName(this.sources[t])));if(0===(e=Array.prototype.concat.apply([],e)).length)throw"Couldn't find an element from "+this.sources+" to use as a source";return e[0]},WebGLazy.prototype.insertStylesheet=function(){this.style=document.createElement("style"),document.head.appendChild(this.style),this.style.innerHTML=["html,body,div#canvasContainer{","    padding:0;","    margin:0;","","    width:100%;","    height:100%;","","    top:0;","    left:0;","    right:0;","    bottom:0;","","    background: "+this.background+";","    color:#FFFFFF;","","    overflow:hidden;","","    /*cursor:none;*/",this.hideSource?"    visibility: hidden!important;":"","}","","canvas#outputCanvas{","    image-rendering: optimizeSpeed;","    image-rendering: -webkit-crisp-edges;","    image-rendering: -moz-crisp-edges;","    image-rendering: -o-crisp-edges; ","    image-rendering: crisp-edges;","    image-rendering: -webkit-optimize-contrast;","    image-rendering: optimize-contrast;","    image-rendering: pixelated;","    -ms-interpolation-mode: nearest-neighbor;","","    position:absolute;","    margin:auto;","    top:0;","    left:-1000%;","    right:-1000%;","    bottom:0;","",this.hideSource?" visibility: visible!important;":"",this.scaleMode===this.constructor.SCALE_MODES.MULTIPLES?["    transition:","        width  0.2s cubic-bezier(0.22, 1.84, 0.88, 0.77),","        height 0.2s cubic-bezier(0.22, 1.84, 0.88, 0.77);"].join("\n"):"","};"].join("\n")},WebGLazy.prototype.init=function(){this.size={x:this.source.width||this.source.style.width,y:this.source.height||this.source.style.height},this.size.x*=this.scaleMultiplier||1,this.size.y*=this.scaleMultiplier||1,this.ratio=this.size.x/this.size.y,this.insertStylesheet(),this.canvasContainer=document.createElement("div"),this.canvasContainer.id="canvasContainer",this.allowDownscaling||(this.canvasContainer.style.minWidth=this.size.x+"px",this.canvasContainer.style.minHeight=this.size.y+"px"),this.canvas=document.createElement("canvas"),this.canvas.id="outputCanvas",this.canvas.width=this.size.x,this.canvas.height=this.size.y,this.canvas.style.width=this.canvas.style.height=0,this.canvasContainer.appendChild(this.canvas),document.body.appendChild(this.canvasContainer);try{this.gl=new s(this.canvas),this.render=this.renderGL}catch(t){console.warn("Falling back to canvas rendering: ",t),this.render=this.renderCanvas,this.canvas2d=this.canvas.getContext("2d")}if(this.gl){var t,e,i=document.getElementById("shader-vert"),o=document.getElementById("shader-frag");i&&(t=i.innerHTML),o&&(e=o.innerHTML),t=t||["// default vertex shader","attribute vec4 position;","void main() {","    gl_Position = position;","}"].join("\n"),e=e||["// default fragment shader","precision mediump float;","uniform sampler2D tex0;","uniform sampler2D tex1;","uniform vec2 resolution;","","void main() {","    vec2 coord = gl_FragCoord.xy;","    vec2 uv = coord.xy / resolution.xy;","    gl_FragColor = vec4(texture2D(tex0, uv).rgb, 1.0);","}"].join("\n"),this.shader=new s.Shader(t,e),this.vertices=new Float32Array([-1,-1,1,-1,-1,1,1,-1,1,1,-1,1]),this.vertexBuffer=this.gl.createBuffer(),this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.vertexBuffer),this.gl.bufferData(this.gl.ARRAY_BUFFER,this.vertices,this.gl.STATIC_DRAW),this.textureSource=new s.Texture(this.source,0),this.disableFeedbackTexture||(this.textureFeedback=new s.Texture(this.canvas,1)),this.glLocations={position:this.gl.getAttribLocation(this.shader.program,"position"),tex0:this.gl.getUniformLocation(this.shader.program,"tex0"),tex1:this.gl.getUniformLocation(this.shader.program,"tex1"),time:this.gl.getUniformLocation(this.shader.program,"time"),resolution:this.gl.getUniformLocation(this.shader.program,"resolution")},this.gl.enableVertexAttribArray(this.glLocations.position),this.gl.viewport(0,0,this.size.x,this.size.y),this.shader.useProgram(),this.gl.vertexAttribPointer(this.glLocations.position,2,this.gl.FLOAT,!1,0,0),this.gl.clearColor(0,0,0,1),this.gl.uniform1i(this.glLocations.tex0,0),this.gl.uniform1i(this.glLocations.tex1,1),this.gl.uniform2f(this.glLocations.resolution,this.size.x,this.size.y)}window.onresize=this.onResize.bind(this),window.onresize(),this.disableMouseEvents||(this.canvas.onmousedown=this.onMouseEvent.bind(this),this.canvas.onmouseup=this.onMouseEvent.bind(this),this.canvas.onmousemove=this.onMouseEvent.bind(this),this.canvas.onmouseenter=this.onMouseEvent.bind(this),this.canvas.onmouseexit=this.onMouseEvent.bind(this),this.canvas.onmouseover=this.onMouseEvent.bind(this),this.canvas.onmouseout=this.onMouseEvent.bind(this),this.canvas.onmouseleave=this.onMouseEvent.bind(this),this.canvas.onclick=this.onMouseEvent.bind(this),this.canvas.ondblclick=this.onMouseEvent.bind(this),this.canvas.oncontextmenu=this.onMouseEvent.bind(this)),this.accumulator=0,"performance"in window?this.now=function(){return window.performance.now()}:this.now=function(){return window.Date.now()},"requestAnimationFrame"in window?this.requestAnimationFrame=function(t){window.requestAnimationFrame(t)}:this.requestAnimationFrame=function(t){setTimeout(t,-1)},this.startTime=this.now(),this.curTime=this.lastTime=0,this.main=this.main.bind(this),this.main(this.curTime)},WebGLazy.prototype.main=function(t){this.lastTime=this.curTime,this.curTime=(t||this.now())-this.startTime,this.deltaTime=this.curTime-this.lastTime,this.accumulator+=this.deltaTime,this.accumulator>this.timestep&&(this.render(),this.accumulator-=this.timestep),this.requestAnimationFrame(this.main)},WebGLazy.prototype.renderCanvas=function(){this.canvas2d.clearRect(0,0,this.size.x,this.size.y),this.canvas2d.drawImage(this.source,0,0)},WebGLazy.prototype.renderGL=function(){this.textureSource.update(),this.gl.uniform1f(this.glLocations.time,this.curTime),this.gl.clear(this.gl.COLOR_BUFFER_BIT|this.gl.DEPTH_BUFFER_BIT),this.shader.useProgram(),this.textureSource.bind(),this.disableFeedbackTexture||this.textureFeedback.bind(),this.gl.drawArrays(this.gl.TRIANGLES,0,this.vertices.length/2),this.disableFeedbackTexture||this.textureFeedback.update()},WebGLazy.prototype.onResize=function(){var t,e,i=this.canvasContainer.offsetWidth,s=this.canvasContainer.offsetHeight,o=i/s,r=this.constructor.SCALE_MODES,n=1;switch(o<this.ratio?s=Math.round(i/this.ratio):i=Math.round(s*this.ratio),this.scaleMode){case r.MULTIPLES:for(n=1,t=this.size.x,e=this.size.y;t+this.size.x<=i||e+this.size.y<=s;)t+=this.size.x,e+=this.size.y,n+=1;break;case r.FIT:t=i,e=s,n=i/this.size.x;break;case r.COVER:i=this.canvasContainer.offsetWidth,s=this.canvasContainer.offsetHeight,o<this.ratio?i=Math.round(s*this.ratio):s=Math.round(i/this.ratio),t=i,e=s,n=i/this.size.x;break;case r.NONE:n=1,t=this.size.x,e=this.size.y}this.scaleMultiplier=this.scaleMultiplier*n,this.canvas.style.width=t+"px",this.canvas.style.height=e+"px"},WebGLazy.prototype.onMouseEvent=function(t){var e=this.canvas,i=this.source,s=e.offsetLeft+e.scrollLeft,o=e.offsetTop+e.scrollTop,r=i.offsetLeft+i.scrollLeft,n=i.offsetTop+i.scrollTop,h=1/this.scaleMultiplier,a=document.createEvent("MouseEvent");a.initMouseEvent(t.type,t.bubbles,t.cancelable,t.view,t.detail,(t.screenX-s)*h+r,(t.screenY-o)*h+n,(t.clientX-s)*h+r,(t.clientY-o)*h+n,t.ctrlKey,t.altKey,t.shiftKey,t.metaKey,t.button,t.relatedTarget),i.dispatchEvent(a)}}]));
+	</script>
+</body></html>
